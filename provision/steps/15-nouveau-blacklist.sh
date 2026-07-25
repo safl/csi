@@ -47,15 +47,23 @@ options nouveau modeset=0
 # blacklist. Cloud-init kernels typically don't include nouveau in
 # initramfs, but a kernel-upgrade postinst on the operator's box may
 # re-add it; the blacklist file is honoured by the rebuilt initramfs.
-case "$NOSI_PKGMGR" in
-apt)
-    update-initramfs -u 2>/dev/null \
-        || nosi_warn "update-initramfs -u failed (initramfs not regenerated)"
-    ;;
-dnf)
+#
+# Pick the generator by what is actually installed, not by package
+# manager: apt images may run either initramfs-tools OR dracut. On
+# Ubuntu-26.04 dracut is the apt-native generator; on headless netboot
+# images step 34 later purges initramfs-tools and leaves dracut sole. If
+# we blindly called ``update-initramfs`` on a dracut-only apt box the
+# command would be missing and this regen would silently no-op (the
+# blacklist still lands via /etc/modprobe.d, but the initrd copy would be
+# stale). Detect dracut the same way step 34 does and prefer it.
+if command -v dracut >/dev/null 2>&1 && [ -d /etc/dracut.conf.d ]; then
     dracut --force 2>/dev/null \
         || nosi_warn "dracut --force failed (initramfs not regenerated)"
-    ;;
-esac
+elif command -v update-initramfs >/dev/null 2>&1; then
+    update-initramfs -u 2>/dev/null \
+        || nosi_warn "update-initramfs -u failed (initramfs not regenerated)"
+else
+    nosi_warn "no initramfs generator found (dracut / update-initramfs); skipping regen"
+fi
 
 nosi_info "step 15-nouveau-blacklist done"

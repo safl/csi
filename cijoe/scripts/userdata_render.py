@@ -112,10 +112,10 @@ def _provision_files(provision_root: Path) -> list[Path]:
     Historically this filtered to ``.sh`` + ``apply.sh`` for the flat
     ``apply.sh + lib/*.sh + steps/*.sh`` layout. The layout has since
     grown ``netboot/`` with assets that don't (and can't) end in
-    ``.sh`` -- ``/etc/initramfs-tools/scripts/ramboot`` is looked up
-    by exact name by initramfs-tools' ``/init``; the dracut config
-    drop-in must end in ``.conf``. Include every file so subtrees can
-    ship whatever mix of names they need.
+    ``.sh`` -- the dracut config drop-in
+    ``netboot/dracut/conf.d/99-nosi-netboot.conf`` must end in ``.conf``
+    for dracut to read it. Include every file so subtrees can ship
+    whatever mix of names they need.
     """
     return sorted(p for p in provision_root.rglob("*") if p.is_file())
 

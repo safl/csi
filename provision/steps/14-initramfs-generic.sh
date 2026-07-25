@@ -17,6 +17,14 @@
 # Debian / Ubuntu / Raspberry Pi OS already build a generic initramfs
 # (update-initramfs defaults to MODULES=most), so this is dnf/Fedora-only.
 #
+# The non-dnf skip stays correct even though headless apt netboot images
+# now use dracut too: at step-14 time dracut isn't installed on apt yet
+# (step 34 installs it), so this step could not regenerate a dracut initrd
+# here even if it tried. Step 34 therefore writes its OWN copy of the
+# 00-nosi-generic.conf below (same content) right before it regenerates on
+# apt. Non-netboot apt images keep initramfs-tools, which is already
+# generic via MODULES=most, so they need nothing from this step either.
+#
 # Two parts: drop hostonly="no" into dracut.conf.d so EVERY later dracut
 # run is generic (this bake's later steps, kernel upgrades on the running
 # box, and the desktop derive's kernels -- the conf travels in the rootfs);
