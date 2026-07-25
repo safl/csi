@@ -61,8 +61,18 @@ depends() {
 # ignores modules not built for this kernel, which is what we want:
 # btrfs may or may not be available; the runtime hook probes
 # opportunistically.
+#
+# r8125 is the out-of-tree Realtek 2.5GbE DKMS driver installed by step
+# 10-r8125-dkms (x86-only; skipped on arm64, where instmods just no-ops
+# it). It MUST be in the netboot initrd: an RTL8125 target (e.g. ASRock
+# Rack matx) does not come up on the in-tree r8169 in early userspace,
+# and neither dracut's generic set nor a host-only build pulls a
+# /updates/dkms/ module in -- so without this the initrd never DHCPs or
+# nbd-connects and the box reboot-loops. The ``softdep r8169 pre: r8125``
+# + ASPM/EEE options from step 10 ride along via /etc/modprobe.d, which
+# dracut copies into the initrd, so r8125 is preferred once present.
 installkernel() {
-    instmods nbd overlay ext4 xfs btrfs
+    instmods nbd overlay ext4 xfs btrfs r8125
 }
 
 # Userspace: nbd-client + shell tooling the runtime hooks use.

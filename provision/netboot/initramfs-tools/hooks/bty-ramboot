@@ -42,3 +42,13 @@ manual_add_modules overlay
 manual_add_modules ext4
 manual_add_modules xfs
 manual_add_modules btrfs
+
+# r8125: the out-of-tree Realtek 2.5GbE DKMS driver from step
+# 10-r8125-dkms (x86-only). An RTL8125 target (e.g. ASRock Rack matx)
+# needs it IN the netboot initrd to bring the NIC up before pivot -- the
+# in-tree r8169 does not drive it in early userspace, and MODULES=most
+# never pulls a /updates/dkms/ module. ``manual_add_modules`` no-ops if
+# r8125 was not built (non-x86), so this is safe on every arch. The
+# softdep + options ride along via /etc/modprobe.d (copied into the
+# initrd), so r8125 is preferred over r8169 once present.
+manual_add_modules r8125
