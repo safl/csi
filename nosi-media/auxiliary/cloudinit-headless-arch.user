@@ -125,9 +125,9 @@ runcmd:
   # nosi provision: operator account, systemd-networkd DHCP, sshd + host-key
   # oneshot, serial console, and the dracut netboot ramboot wiring. Each step
   # under provision/steps/ is independently idempotent. Same apply.sh runs on
-  # a vanilla Arch VM (`sudo /opt/nosi/provision/apply.sh arch-headless`) to
+  # a vanilla Arch VM (`sudo /opt/nosi/provision/apply.sh arch-headless-lean`) to
   # reach this image's parity.
-  - /opt/nosi/provision/apply.sh arch-headless
+  - /opt/nosi/provision/apply.sh arch-headless-lean
 
   # odus is created by the top-level `users:` block; all that is left here is
   # locking root so the only login channel is odus (step 31 also does this).
@@ -164,7 +164,7 @@ runcmd:
   # Trim the pacman package cache for a smaller image.
   - rm -rf /var/cache/pacman/pkg/* /root/.cache /home/*/.cache /tmp/* /var/tmp/*
 
-final_message: "nosi arch-headless baked in $UPTIME seconds; powering off"
+final_message: "nosi arch-headless-lean baked in $UPTIME seconds; powering off"
 
 power_state:
   mode: poweroff

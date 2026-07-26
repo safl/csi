@@ -50,7 +50,7 @@ pacman)
     # Arch is the deliberately-lean "minimal netboot base": NO dev
     # toolchain (no base-devel / gcc / cmake / qemu). The tripwire here
     # only asserts what a minimal headless netboot image genuinely needs
-    # and what the arch-headless.user actually installs -- the netboot
+    # and what the arch-headless-lean.user actually installs -- the netboot
     # machinery (dracut, nbd-client), python for step 98's metadata
     # emitter, sudo for the operator account, sshd, growpart for step 09,
     # and the pixie live-env flash/inventory tool deps (lshw, partprobe

@@ -98,7 +98,7 @@ variants:
 
   # Arch is rolling: no version token in the variant name. The deliberately
   # lean minimal netboot base (no dev toolchain); headless-only, no derives.
-  arch-headless:
+  arch-headless-lean:
     shape: headless
     flashable: true
     netboot: true
