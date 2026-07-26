@@ -1,0 +1,66 @@
+# nosi base image : Arch Linux (rolling)
+#
+# Arch is rolling, so there is no version token in the variant name (unlike
+# fedora-44 / freebsd-15): the variant is simply `arch-headless`. The distro
+# is derived as the first `-`-separated token (`arch`) by apply.sh + the
+# smoketest, and /etc/os-release ID is `arch`, so NOSI_DISTRO resolves to
+# `arch` -> NOSI_PKGMGR=pacman.
+#
+# This is the deliberately-LEAN "minimal netboot base" experiment: NO dev
+# toolchain. See nosi-media/auxiliary/cloudinit-headless-arch.user.
+#
+# The cloud image URL is the rolling `latest` build. Arch also publishes
+# dated builds under /images/<YYYYMMDD.N>/; pin to one of those for a
+# reproducible bake. `latest` is fine for the exploratory build (the CI
+# cache keys on this file's hash, so a given cache entry stays stable).
+#
+# Usage (from repo root, the Makefile cd's into cijoe/):
+#   make build VARIANT=arch-headless
+
+[nosi]
+variant = "arch-headless"
+
+[cijoe.transport.qemu_guest]
+username = "root"
+password = "root"
+hostname = "localhost"
+port = 4200
+
+[cijoe.workflow]
+fail_fast = true
+
+[qemu]
+img_bin = "qemu-img"
+
+[qemu.systems.x86_64]
+bin = "/usr/bin/qemu-system-x86_64"
+
+[qemu.guests.nosi-arch-headless-x86_64]
+path = "{{ local.env.HOME }}/system_imaging/guests/nosi-arch-headless-x86_64"
+system_label = "x86_64"
+system_image_name = "nosi-arch-headless-x86_64"
+system_args.kwa = { cpu = "host", smp = 4, m = "4G", accel = "kvm" }
+system_args.tcp_forward = { host = 4200, guest = 22 }
+
+[system-imaging.images.nosi-arch-headless-x86_64]
+system_label = "x86_64"
+
+cloud.url = "https://geo.mirror.pkgbuild.com/images/latest/Arch-Linux-x86_64-cloudimg.qcow2"
+cloud.path = "{{ local.env.HOME }}/system_imaging/cloud/Arch-Linux-x86_64-cloudimg.qcow2"
+cloud.metadata_path = "nosi-media/auxiliary/cloudinit-metadata.meta"
+cloud.userdata_path = "nosi-media/auxiliary/cloudinit-headless-arch.user"
+
+disk.path = "{{ local.env.HOME }}/system_imaging/disk/nosi-arch-headless-x86_64.qcow2"
+
+publish.raw_path = "{{ local.env.HOME }}/system_imaging/disk/nosi-arch-headless-x86_64.img"
+publish.gz_path = "{{ local.env.HOME }}/system_imaging/disk/nosi-arch-headless-x86_64.img.gz"
+publish.gzip_level = 9
+
+# Netboot bundle: vmlinuz + initrd extracted from the baked qcow2 so pixie
+# can ramboot this image via NBD using the image's OWN kernel. Only headless
+# images ship a netboot bundle.
+netboot.bundle_dir = "{{ local.env.HOME }}/system_imaging/disk/nosi-arch-headless-netboot-x86_64"
+netboot.source_disk_ref = "ghcr.io/safl/nosi/arch-headless"
+
+# No derives: Arch ships only the headless minimal netboot base (no desktop /
+# wsl / lxc / docker / proxmox shapes).

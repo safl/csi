@@ -721,6 +721,116 @@ def _run_assertions(
         )
         return results
 
+    # ---- Arch (minimal netboot base) ------------------------------------
+    # Arch is the deliberately-LEAN experiment: firmware + NIC/storage
+    # drivers + python + the dracut netboot machinery, and explicitly NO
+    # dev toolchain. So it gets its own reduced assertion set (like FreeBSD
+    # above) instead of the fat generic Linux surface below, which hard-
+    # asserts the step 12/20/22 dev tools this image intentionally omits.
+    # What we DO assert: the operator identity, the apply-ok whole-chain
+    # sentinel, the motd banner, the build-identity file, the serial
+    # console (step 33, for IPMI SOL on the RTL8125 target hardware), sshd
+    # enablement, and -- the whole reason this base exists -- that the
+    # dracut ramboot netboot wiring actually baked (step 34). The universal
+    # metadata + login/sudo assertions above already ran.
+    if distro == "arch":
+        check(
+            "/etc/os-release fingerprints arch",
+            "cat /etc/os-release 2>/dev/null || true",
+            lambda rc, out: (
+                "arch" in out.lower(),
+                (out.splitlines()[0] if out else "(empty /etc/os-release)"),
+            ),
+        )
+        check(
+            "odus is uid 1000 and a member of wheel",
+            "id odus",
+            lambda rc, out: (
+                rc == 0 and "uid=1000" in out and "wheel" in out,
+                out or f"exit {rc}",
+            ),
+        )
+        check(
+            "/etc/nosi/apply-ok sentinel present (apply.sh completed cleanly)",
+            "test -r /etc/nosi/apply-ok && cat /etc/nosi/apply-ok",
+            lambda rc, out: (rc == 0 and bool(out), out or "(missing apply-ok sentinel)"),
+        )
+        check(
+            "/etc/motd carries the nosi banner",
+            "cat /etc/motd",
+            lambda rc, out: (
+                rc == 0 and "nosi" in out,
+                (out.splitlines()[0] if out.strip() else "(empty /etc/motd)"),
+            ),
+        )
+        check(
+            "/etc/nosi-release has NOSI_VARIANT",
+            "cat /etc/nosi-release",
+            lambda rc, out: (
+                rc == 0 and f"NOSI_VARIANT={variant}" in out,
+                out if rc != 0 or f"NOSI_VARIANT={variant}" not in out else "ok",
+            ),
+        )
+        # ---- lean package surface: only what a netboot base needs --------
+        check(
+            "netboot baseline (python3, dracut, nbd-client, sshd) present",
+            "for t in python3 dracut nbd-client sshd; do "
+            'command -v "$t" >/dev/null || { echo "missing $t"; exit 1; }; '
+            "done && echo ok",
+            lambda rc, out: (out == "ok", out or f"exit {rc}"),
+        )
+        # ---- dracut ramboot wiring baked (step 34) -----------------------
+        # The pixie-ramboot dracut module + the conf.d that forces it into
+        # every initrd are what make this image nbdbootable. Assert the
+        # module dir + the add_dracutmodules conf, plus the canonical
+        # /boot/initramfs-linux.img the packer pairs with vmlinuz-linux.
+        check(
+            "pixie-ramboot dracut module installed (step 34)",
+            "test -f /usr/lib/dracut/modules.d/99pixie-ramboot/module-setup.sh && echo ok",
+            lambda rc, out: (out == "ok", out or "missing 99pixie-ramboot module"),
+        )
+        check(
+            "dracut conf forces pixie-ramboot into every initrd (step 34)",
+            "grep -q 'pixie-ramboot' /etc/dracut.conf.d/99-nosi-netboot.conf && echo ok",
+            lambda rc, out: (out == "ok", out or "missing add_dracutmodules conf"),
+        )
+        check(
+            "/boot/vmlinuz-linux + /boot/initramfs-linux.img present (netboot pair)",
+            "test -f /boot/vmlinuz-linux && test -f /boot/initramfs-linux.img && echo ok",
+            lambda rc, out: (out == "ok", out or "missing kernel/initrd pair"),
+        )
+        # ---- sshd enabled ------------------------------------------------
+        check(
+            "sshd.service is-enabled",
+            "systemctl is-enabled sshd.service",
+            lambda rc, out: (out.strip() == "enabled", out or f"exit {rc}"),
+        )
+        # ---- serial console for IPMI SOL (step 33) -----------------------
+        check(
+            "console=ttyS0 on the kernel cmdline (IPMI SOL / COM1)",
+            "grep -q 'console=ttyS0' /proc/cmdline && echo ok",
+            lambda rc, out: (out == "ok", out or "no console=ttyS0 in /proc/cmdline"),
+        )
+        check(
+            "console=ttyS1 on the kernel cmdline (IPMI SOL / COM2)",
+            "grep -q 'console=ttyS1' /proc/cmdline && echo ok",
+            lambda rc, out: (out == "ok", out or "no console=ttyS1 in /proc/cmdline"),
+        )
+        check(
+            "ttyS0 is the last console= on the cmdline (/dev/console = COM1)",
+            "cat /proc/cmdline",
+            lambda rc, out: (
+                _last_console(out) == "ttyS0",
+                f"last console= is {_last_console(out)!r}, want 'ttyS0': {out}",
+            ),
+        )
+        check(
+            "serial-getty@ttyS0 active (SOL login prompt / COM1)",
+            "systemctl is-active serial-getty@ttyS0.service",
+            lambda rc, out: (out.strip() == "active", out or f"exit {rc}"),
+        )
+        return results
+
     # ---- apply.sh completed end-to-end -----------------------------------
     # /etc/nosi/apply-ok is written by the LAST line of apply.sh, only
     # after every step has succeeded under `set -e`. Its absence proves

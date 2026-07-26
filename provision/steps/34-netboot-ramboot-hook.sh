@@ -124,6 +124,49 @@ hostonly="no"
         # Generic-initrd conf is already in place from step 14 (dnf-gated).
         nosi_pkg_install nbd dracut-network
         ;;
+    pacman)
+        # Arch: mkinitcpio is the stock initramfs generator, so the whole
+        # point here is to make DRACUT the generator instead (same "one
+        # framework: dracut" convergence the header describes). dracut,
+        # its network + nbd modules, and the nbd-client attach binary all
+        # ship in Arch's ``dracut`` and ``nbd`` packages; the
+        # ``network-manager`` dracut module our 99pixie-ramboot depends()
+        # names needs NetworkManager present at initrd-build time, so
+        # install ``networkmanager`` too. It stays INSTALLED-BUT-DISABLED:
+        # the booted system runs systemd-networkd (step 08); NM is only
+        # bundled into the initrd for the ramboot DHCP.
+        nosi_pkg_install dracut nbd networkmanager
+
+        # Make dracut the SOLE initramfs generator producing the file GRUB
+        # references (/boot/initramfs-linux.img). On Arch both mkinitcpio
+        # AND dracut ship pacman hooks that regenerate on a kernel upgrade;
+        # left alone, mkinitcpio's hook would overwrite our dracut ramboot
+        # initrd with a plain one that carries NO ramboot machinery (the
+        # box would then flash-boot fine but never ramboot -- the same
+        # failure mode the apt branch's initramfs-tools purge guards
+        # against). Mask both mkinitcpio hooks AND dracut's own default
+        # hooks (they emit initramfs-<kver>.img + a heavy unified EFI image
+        # under the wrong name); step 34 owns the single canonical initrd
+        # explicitly below. Symlinking to /dev/null is the ArchWiki-blessed
+        # way to neutralise a libalpm hook without removing the package.
+        install -d -m 0755 /etc/pacman.d/hooks
+        for h in 90-mkinitcpio-install 60-mkinitcpio-remove \
+                 90-dracut-install 60-dracut-remove; do
+            ln -sf /dev/null "/etc/pacman.d/hooks/${h}.hook"
+        done
+
+        # Generic-initrd conf (mirrors 14-initramfs-generic / the apt branch
+        # below): nosi images are flashed to arbitrary bare metal, so the
+        # initramfs must not assume the build VM's storage/driver profile.
+        install -d -m 0755 /etc/dracut.conf.d
+        nosi_write_if_changed \
+'# Managed by nosi/provision/steps/34-netboot-ramboot-hook.sh
+# Build a generic initramfs (all drivers), not host-only: nosi images are
+# flashed to arbitrary bare metal, so the initramfs must not assume the
+# build VM hardware. Mirrors 14-initramfs-generic.sh (which is dnf-gated).
+hostonly="no"
+' /etc/dracut.conf.d/00-nosi-generic.conf 0644
+        ;;
     *)
         nosi_warn "unsupported package manager for netboot hook (NOSI_PKGMGR=$NOSI_PKGMGR); skipping"
         exit 0
@@ -144,10 +187,45 @@ install -m 0755 "$ASSETS/dracut/modules.d/99pixie-ramboot/pixie-ramboot-cmdline.
 install -m 0755 "$ASSETS/dracut/modules.d/99pixie-ramboot/pixie-ramboot-online.sh" /usr/lib/dracut/modules.d/99pixie-ramboot/pixie-ramboot-online.sh
 install -m 0755 "$ASSETS/dracut/modules.d/99pixie-ramboot/pixie-ramboot-mount.sh" /usr/lib/dracut/modules.d/99pixie-ramboot/pixie-ramboot-mount.sh
 
-# ``--no-hostonly`` forces generic even if the conf above is somehow not
-# picked up; it also brings the dnf path to parity with apt (step 14 already
-# wrote hostonly="no" on dnf, so this changes nothing there but the flag).
-nosi_info "regenerating all initramfs images (dracut --regenerate-all --no-hostonly --force)"
-dracut --regenerate-all --no-hostonly --force
+# Regenerate the initrd(s). ``--no-hostonly`` forces generic even if the
+# conf above is somehow not picked up.
+#
+# apt/dnf: ``--regenerate-all`` rebuilds every installed kernel's initrd at
+# its distro-default path (initrd.img-<kver> / initramfs-<kver>.img), which
+# the netboot packer pairs with vmlinuz-<kver>.
+#
+# Arch differs: the kernel is ``/boot/vmlinuz-linux`` (token ``linux``, not
+# a version), and the packer pairs vmlinuz-<TOKEN> with initramfs-<TOKEN>.img
+# / initrd.img-<TOKEN>. ``dracut --regenerate-all`` would instead write
+# initramfs-<real-kver>.img, which has no matching vmlinuz-<real-kver> and
+# so the bundle pack would find no pair. Generate the single canonical
+# ``/boot/initramfs-linux.img`` explicitly for the installed ``linux``
+# kernel: that name matches vmlinuz-linux for the packer AND is exactly the
+# file GRUB's grub.cfg references, so the local flash-boot path keeps
+# working too.
+if [ "$NOSI_PKGMGR" = "pacman" ]; then
+    # Resolve the kernel version dir the ``linux`` package installed. Arch
+    # drops a ``pkgbase`` file next to each module tree naming the source
+    # package, so pick the one whose pkgbase is ``linux``. Fall back to the
+    # sole/newest module dir if pkgbase is somehow absent.
+    kver=""
+    for d in /usr/lib/modules/*/; do
+        [ -r "${d}pkgbase" ] || continue
+        if [ "$(cat "${d}pkgbase")" = "linux" ]; then
+            kver="$(basename "$d")"
+            break
+        fi
+    done
+    if [ -z "$kver" ]; then
+        # shellcheck disable=SC2012
+        kver="$(basename "$(ls -d /usr/lib/modules/*/ 2>/dev/null | sort -V | tail -n1)")"
+    fi
+    [ -n "$kver" ] || nosi_die "cannot resolve installed kernel version under /usr/lib/modules"
+    nosi_info "regenerating /boot/initramfs-linux.img via dracut (kver=$kver, --no-hostonly)"
+    dracut --no-hostonly --force /boot/initramfs-linux.img "$kver"
+else
+    nosi_info "regenerating all initramfs images (dracut --regenerate-all --no-hostonly --force)"
+    dracut --regenerate-all --no-hostonly --force
+fi
 
 nosi_info "step 34-netboot-ramboot-hook done"

@@ -62,6 +62,9 @@ fi
 case "$NOSI_PKGMGR" in
 apt) nosi_pkg_install cloud-guest-utils ;;
 dnf) nosi_pkg_install cloud-utils-growpart ;;
+# Arch ships growpart in cloud-guest-utils (extra). resize2fs is in
+# e2fsprogs (part of Arch base), so the ext4 rootfs resize is covered.
+pacman) nosi_pkg_install cloud-guest-utils ;;
 esac
 
 # ---- 2. the grow helper --------------------------------------------------

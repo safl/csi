@@ -16,8 +16,8 @@
 set -euo pipefail
 
 # ---- distro detection ------------------------------------------------------
-# NOSI_DISTRO is one of: debian, ubuntu, fedora, freebsd.
-# NOSI_PKGMGR is one of: apt, dnf, pkg.
+# NOSI_DISTRO is one of: debian, ubuntu, fedora, arch, freebsd.
+# NOSI_PKGMGR is one of: apt, dnf, pacman, pkg.
 # Steps that need finer granularity (e.g. trixie vs noble) can read /etc/os-release directly.
 
 nosi_detect_distro() {
@@ -42,8 +42,9 @@ nosi_detect_distro() {
     case "$NOSI_DISTRO" in
         debian|ubuntu) NOSI_PKGMGR=apt ;;
         fedora)        NOSI_PKGMGR=dnf ;;
+        arch)          NOSI_PKGMGR=pacman ;;
         freebsd)       NOSI_PKGMGR=pkg ;;
-        *) nosi_die "unsupported distro: $NOSI_DISTRO (need debian, ubuntu, fedora, or freebsd)" ;;
+        *) nosi_die "unsupported distro: $NOSI_DISTRO (need debian, ubuntu, fedora, arch, or freebsd)" ;;
     esac
 
     export NOSI_DISTRO NOSI_DISTRO_VERSION NOSI_PKGMGR
@@ -78,6 +79,10 @@ nosi_pkg_install() {
     case "$NOSI_PKGMGR" in
         apt) DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends "$@" ;;
         dnf) dnf install -y "$@" ;;
+        # --needed so an already-current package is not needlessly
+        # reinstalled (pacman -S otherwise re-downloads + re-extracts it).
+        # No -y flag exists; --noconfirm is the non-interactive equivalent.
+        pacman) pacman -S --needed --noconfirm "$@" ;;
         pkg) ASSUME_ALWAYS_YES=yes pkg install -y "$@" ;;
         *)   nosi_die "no package manager wired for $NOSI_PKGMGR" ;;
     esac
@@ -88,6 +93,7 @@ nosi_pkg_installed() {
     case "$NOSI_PKGMGR" in
         apt) dpkg-query -W -f='${Status}' "$1" 2>/dev/null | grep -q "install ok installed" ;;
         dnf) rpm -q "$1" >/dev/null 2>&1 ;;
+        pacman) pacman -Qq "$1" >/dev/null 2>&1 ;;
         pkg) pkg info -e "$1" >/dev/null 2>&1 ;;
         *)   return 1 ;;
     esac

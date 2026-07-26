@@ -96,6 +96,13 @@ variants:
     shape: lxc
     flashable: false
 
+  # Arch is rolling: no version token in the variant name. The deliberately
+  # lean minimal netboot base (no dev toolchain); headless-only, no derives.
+  arch-headless:
+    shape: headless
+    flashable: true
+    netboot: true
+
   rpios-13-headless:
     shape: headless
     flashable: true

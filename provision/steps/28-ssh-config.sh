@@ -153,9 +153,11 @@ ExecStartPre=/usr/sbin/sshd -t
 # (more recent versions) ssh.socket; the cloud image may have either enabled
 # by default. Walk every candidate, enable each that actually exists, and
 # log the resulting state so the bake log makes "is sshd ready for login?"
-# answerable without booting the image. Fedora ships sshd.service only.
+# answerable without booting the image. Fedora + Arch ship sshd.service
+# only (openssh's unit is named sshd.service on both).
 case "$NOSI_DISTRO" in
 fedora) ssh_units=(sshd.service) ;;
+arch)   ssh_units=(sshd.service) ;;
 *)      ssh_units=(ssh.service ssh.socket) ;;
 esac
 

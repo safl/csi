@@ -229,9 +229,24 @@ elif distro_id == "fedora":
         manual_pkgs = sorted({line for line in p.stdout.split() if line})
     except subprocess.SubprocessError:
         pass
+elif distro_id == "arch":
+    # ``pacman -Qqe`` lists explicitly-installed packages (the pacman
+    # analog of apt-mark showmanual / dnf --userinstalled): everything
+    # requested by name rather than pulled in as a dependency.
+    try:
+        p = subprocess.run(
+            ["pacman", "-Qqe"],
+            capture_output=True, text=True, check=True, timeout=30,
+        )
+        manual_pkgs = sorted({line for line in p.stdout.split() if line})
+    except subprocess.SubprocessError:
+        pass
 
+pkg_manager = {
+    "debian": "apt", "ubuntu": "apt", "fedora": "dnf", "arch": "pacman",
+}.get(distro_id, "unknown")
 meta["packages"] = {
-    "manager": "apt" if distro_id in ("debian", "ubuntu") else "dnf",
+    "manager": pkg_manager,
     "manually_installed": manual_pkgs,
     "count": len(manual_pkgs),
 }
