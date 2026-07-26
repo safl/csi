@@ -52,8 +52,10 @@ pacman)
     # only asserts what a minimal headless netboot image genuinely needs
     # and what the arch-headless.user actually installs -- the netboot
     # machinery (dracut, nbd-client), python for step 98's metadata
-    # emitter, sudo for the operator account, sshd, and growpart for
-    # step 09. Keep this in lockstep with the .user packages: list.
+    # emitter, sudo for the operator account, sshd, growpart for step 09,
+    # and the pixie live-env flash/inventory tool deps (lshw, partprobe
+    # from parted, curl, nvme from nvme-cli). Keep this in lockstep with
+    # the .user packages: list.
     must_have=(
         git
         python3
@@ -62,6 +64,10 @@ pacman)
         dracut
         nbd-client
         growpart
+        lshw
+        partprobe
+        curl
+        nvme
     )
     ;;
 *)

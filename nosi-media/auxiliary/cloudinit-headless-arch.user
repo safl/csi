@@ -93,6 +93,18 @@ packages:
   - networkmanager
   # growpart for the first-boot root grow on bare metal (step 09).
   - cloud-guest-utils
+  # pixie live-env runtime tool deps. In plan B pixie injects its own
+  # (vendored, pure-Python) CLI into this rootfs and nbdboots it ephemerally
+  # to inventory + flash targets; the CLI itself is not baked here, but the
+  # binaries it shells out to must be. lshw = the pixie-inventory hardware
+  # scan; parted = partprobe (re-read the partition table after a flash);
+  # curl = image download in the flash path; nvme-cli = `nvme` for NVMe
+  # target disks. mount/umount/lsblk/sfdisk/blockdev (util-linux), dd
+  # (coreutils), udevadm/systemctl/reboot (systemd) are already in base.
+  - lshw
+  - parted
+  - curl
+  - nvme-cli
   # NIC + platform firmware for bare-metal targets flashed via pixie. Present
   # in the arch-boxes base already; named explicitly so a future base change
   # that drops it fails 06-package-presence loudly rather than shipping a box
