@@ -55,9 +55,11 @@ pacman)
     # emitter, sudo for the operator account, sshd, growpart for step 09,
     # and the pixie live-env flash/inventory tool deps (lshw, partprobe
     # from parted, curl, nvme from nvme-cli). Keep this in lockstep with
-    # the .user packages: list.
+    # the .user packages: list -- assert ONLY what that list installs (plus
+    # what Arch base guarantees). Notably NO git: it is a dev-tool the other
+    # variants carry but this lean base deliberately omits, and the Arch
+    # cloud base does not ship it, so asserting it here would abort the bake.
     must_have=(
-        git
         python3
         sudo
         sshd
