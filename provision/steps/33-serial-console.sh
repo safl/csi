@@ -229,6 +229,60 @@ dnf)
     fi
     enable_serial_gettys
     ;;
+pacman)
+    # Arch (arch-boxes cloud image) uses GRUB, but Arch's grub-mkconfig does
+    # NOT source /etc/default/grub.d/ the way Debian's does, so the apt
+    # branch's drop-in approach won't apply. Edit GRUB_CMDLINE_LINUX_DEFAULT
+    # in /etc/default/grub directly: strip any console= token the base set
+    # (the arch-boxes image already enables a serial console), then re-pin
+    # the canonical ordered set with an explicit baud so IPMI SOL is
+    # deterministic. ttyS0 (COM1) trails so it stays /dev/console; ttyS1
+    # (COM2) is also wired for BMCs that bridge it. Strip ttyS FIRST so the
+    # tty[0-9] strip never eats the `tty` in `ttyS`. Then regenerate
+    # grub.cfg. Idempotent: the strip+re-pin converges on a re-run.
+    GRUB=/etc/default/grub
+    [ -f "$GRUB" ] || {
+        nosi_warn "$GRUB missing; cannot set serial console on Arch"
+        exit 0
+    }
+    add='console=tty0 console=ttyS1,115200n8 console=ttyS0,115200n8'
+    # Pull the current value (strip the KEY=" prefix and trailing "), strip
+    # any console= token the base set, drop it in shell (robust vs an
+    # in-place sed on a quoted value), then re-pin the canonical ordered
+    # set. Read every candidate line but keep the last (the effective one).
+    cur="$(sed -n 's/^GRUB_CMDLINE_LINUX_DEFAULT="\(.*\)"[[:space:]]*$/\1/p' "$GRUB" | tail -n1)"
+    kept=""
+    for tok in $cur; do
+        case "$tok" in
+        console=tty[0-9]* | console=ttyS[0-9]*) : ;;  # drop; re-added below
+        *) kept="${kept:+$kept }$tok" ;;
+        esac
+    done
+    newval="${kept:+$kept }$add"
+    if grep -q '^GRUB_CMDLINE_LINUX_DEFAULT=' "$GRUB"; then
+        # Replace the whole assignment line with the rebuilt value.
+        tmp="$(mktemp)"
+        while IFS= read -r line; do
+            case "$line" in
+            GRUB_CMDLINE_LINUX_DEFAULT=*) printf 'GRUB_CMDLINE_LINUX_DEFAULT="%s"\n' "$newval" ;;
+            *) printf '%s\n' "$line" ;;
+            esac
+        done < "$GRUB" > "$tmp"
+        cat "$tmp" > "$GRUB"
+        rm -f "$tmp"
+    else
+        printf 'GRUB_CMDLINE_LINUX_DEFAULT="%s"\n' "$newval" >> "$GRUB"
+    fi
+    nosi_info "grub: pinned tty0 + ttyS1 (COM2) + ttyS0 (COM1) @115200n8"
+    # Regenerate grub.cfg. arch-boxes installs GRUB with its config at
+    # /boot/grub/grub.cfg; fail loud if grub-mkconfig is absent.
+    if command -v grub-mkconfig >/dev/null 2>&1; then
+        grub-mkconfig -o /boot/grub/grub.cfg
+    else
+        nosi_warn "grub-mkconfig not found; grub.cfg not regenerated"
+    fi
+    enable_serial_gettys
+    ;;
 pkg)
     # FreeBSD: loader.conf is the cmdline equivalent. Dual console with
     # vidconsole FIRST keeps video as the primary console (normal-use output)

@@ -1,0 +1,160 @@
+#cloud-config
+# nosi base : Arch Linux (rolling). Default credentials: operator account
+# `odus` with password `odus.321`, root locked, SSH password auth on (operators
+# rotate the password before exposing the appliance). Per-instance SSH
+# identity: host keys are stripped at the end of cloud-init; step 28's
+# nosi-sshd-keygen oneshot regenerates them on first boot of the flashed
+# instance.
+#
+# This is the deliberately-LEAN "minimal netboot base" experiment: firmware +
+# NIC/storage drivers (from the base kernel) + python + the dracut netboot
+# machinery, and explicitly NO dev toolchain (no base-devel / gcc / rust /
+# llvm / cmake / qemu). Arch is minimal by default, so the goal is a much
+# smaller live-env base than a slimmed Ubuntu. The provision chain that runs
+# for this variant is the curated ARCH_BASE_STEPS list in apply.sh, NOT the
+# fat dev-tooling chain the other headless variants run.
+
+hostname: nosi-arch
+fqdn: nosi-arch.local
+manage_etc_hosts: true
+
+timezone: UTC
+
+ssh_pwauth: true
+
+bootcmd:
+  # Arch's package DB is signed; the arch-boxes cloud image populates the
+  # pacman keyring on first boot via pacman-init.service. cloud-init's
+  # package phase (below) can race that and fail signature checks, so make
+  # the keyring ready SYNCHRONOUSLY here in the init stage before packages
+  # install. `pacman-key --init && --populate` is idempotent; guarded so a
+  # box where pacman-init already ran is a fast no-op.
+  - [ sh, -c, "systemctl start pacman-init.service 2>/dev/null || true; pacman-key --init; pacman-key --populate archlinux" ]
+  # Free UID 1000 for odus (the WSL/Linux convention for the first
+  # interactive user): drop the arch-boxes default user if present.
+  - [ sh, -c, "userdel -r arch 2>/dev/null || true" ]
+
+# Operator account: `odus` with password `odus.321`, passwordless sudo,
+# pinned to UID 1000. Created here (cloud-init users-module) rather than in
+# runcmd because users-module calls `useradd -p HASH`, which writes the hash
+# straight to /etc/shadow. `wheel` is Arch's sudo group (the `sudo` package
+# below provides the binary + the wheel NOPASSWD is our sudoers.d drop-in via
+# step 07). `- default` is intentionally absent (bootcmd removed the base
+# user). Root is locked in runcmd below. The default password stays active
+# out of the box so CI can flash and ssh straight in; the motd warns until
+# the operator rotates it with `passwd odus`.
+users:
+  - name: odus
+    uid: 1000
+    gecos: nosi operator
+    shell: /bin/bash
+    groups: [wheel, kvm]
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    lock_passwd: false
+    hashed_passwd: "$6$nosiOpRator$MNNihj4cU2CANkmlcYthq7Fa.U2r5VwwJxtm1TlqmznXizzkddi0sxKc3YnkgRpcvOLc2V7nOGpbp/tOyD5M81"
+
+growpart:
+  mode: auto
+  devices: ["/"]
+
+resize_rootfs: true
+
+# Refresh + full upgrade before installing the `packages:` list. On a rolling
+# distro a plain `-Sy` followed by `-S <pkg>` is a partial upgrade (can pull a
+# package needing a newer lib than is installed), so a full `-Syu` is the
+# Arch-correct path: package_update -> `pacman -Sy`, package_upgrade ->
+# `pacman -Su`.
+package_update: true
+package_upgrade: true
+
+# Deliberately minimal. Everything else a headless netboot image needs
+# (firmware, NIC + storage drivers, systemd, cloud-init, e2fsprogs) is
+# already in the arch-boxes cloud base. NO base-devel / gcc / cmake / qemu.
+# Keep this list in lockstep with the pacman branch of
+# provision/steps/06-package-presence.sh.
+packages:
+  # python for step 98's metadata emitter (and cloud-init's own runtime).
+  - python
+  # sudo binary for the passwordless-operator account (Arch base omits it).
+  - sudo
+  # sshd for the only login channel.
+  - openssh
+  # dracut: the initramfs generator this base switches to (replacing
+  # mkinitcpio) so the pixie/bty ramboot attach-hook can be baked in; see
+  # provision/steps/34-netboot-ramboot-hook.sh.
+  - dracut
+  # nbd-client: the userspace attach binary dracut's online hook drives to
+  # connect the remote NBD export at ramboot time. Arch ships it in `nbd`.
+  - nbd
+  # NetworkManager: NOT enabled on the booted system (systemd-networkd owns
+  # that, step 08). Installed only so the dracut `network-manager` module our
+  # 99pixie-ramboot depends() names can bundle NM into the initrd for the
+  # ramboot DHCP bring-up.
+  - networkmanager
+  # growpart for the first-boot root grow on bare metal (step 09).
+  - cloud-guest-utils
+  # NIC + platform firmware for bare-metal targets flashed via pixie. Present
+  # in the arch-boxes base already; named explicitly so a future base change
+  # that drops it fails 06-package-presence loudly rather than shipping a box
+  # whose NIC never links.
+  - linux-firmware
+
+# Drop the nosi provision/ tree into /opt/nosi/provision/. The
+# __NOSI_PROVISION_FILES__ marker is expanded at bake time by
+# cijoe/scripts/userdata_render.py into one write_files: entry per file under
+# provision/ (apply.sh, lib/*, steps/*, netboot/*), chmod 0755. The runcmd:
+# section below invokes /opt/nosi/provision/apply.sh, the same script an
+# operator runs on a vanilla Arch VM to reach image parity.
+write_files:
+  # __NOSI_PROVISION_FILES__
+
+runcmd:
+
+  # nosi provision: operator account, systemd-networkd DHCP, sshd + host-key
+  # oneshot, serial console, and the dracut netboot ramboot wiring. Each step
+  # under provision/steps/ is independently idempotent. Same apply.sh runs on
+  # a vanilla Arch VM (`sudo /opt/nosi/provision/apply.sh arch-headless`) to
+  # reach this image's parity.
+  - /opt/nosi/provision/apply.sh arch-headless
+
+  # odus is created by the top-level `users:` block; all that is left here is
+  # locking root so the only login channel is odus (step 31 also does this).
+  - passwd -l root
+
+  # SSH host-key hygiene: openssh's install generated host keys; remove them
+  # so every flashed instance gets unique keys via step 28's nosi-sshd-keygen
+  # oneshot on first boot.
+  - rm -f /etc/ssh/ssh_host_*
+
+  # machine-id: regenerated by systemd-machine-id-setup on first boot when empty.
+  - ': > /etc/machine-id'
+  - rm -f /var/lib/dbus/machine-id
+
+  # cloud-init state cache: clear it so cloud-init runs fresh on first boot of
+  # the flashed instance (against whatever seed pixie injects, or the built-in
+  # NoCloud absence; defaults from this run stay).
+  - cloud-init clean --logs --seed || true
+
+  # Light cleanup: journal, stray Python bytecode.
+  - |
+    set -eu
+    journalctl --vacuum-size=1M 2>/dev/null || true
+    rm -rf /var/log/journal/*
+    find /usr /opt /root /home -type d -name __pycache__ \
+        -exec rm -rf {} + 2>/dev/null || true
+
+  # Clock floor: systemd (PID 1) reads /usr/lib/clock-epoch's mtime at boot
+  # and uses it as the minimum acceptable system time, so a box with a dead
+  # CMOS battery does not come up in 1970 and reject every TLS handshake.
+  # systemd-timesyncd refines the clock over NTP once the network is up.
+  - touch /usr/lib/clock-epoch
+
+  # Trim the pacman package cache for a smaller image.
+  - rm -rf /var/cache/pacman/pkg/* /root/.cache /home/*/.cache /tmp/* /var/tmp/*
+
+final_message: "nosi arch-headless baked in $UPTIME seconds; powering off"
+
+power_state:
+  mode: poweroff
+  timeout: 60
+  message: "nosi build complete"

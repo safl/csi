@@ -28,6 +28,7 @@ help:
 	@echo "  ubuntu-2404-headless  Ubuntu 24.04 noble (HW vendor stacks; cudadev/rocmdev pin here)"
 	@echo "  ubuntu-2604-headless  Ubuntu 26.04 resolute -> derives ubuntu-2604-wsl + ubuntu-2604-docker + ubuntu-2604-lxc"
 	@echo "  fedora-44-headless    Fedora 44 -> derives fedora-44-desktop + fedora-44-lxc"
+	@echo "  arch-headless         Arch Linux rolling (minimal netboot base; NO dev toolchain)"
 	@echo "  freebsd-14-headless   FreeBSD 14.4-RELEASE (Phase 1 scaffold)"
 	@echo "  freebsd-15-headless   FreeBSD 15.0-RELEASE (Phase 1 scaffold)"
 	@echo
@@ -91,6 +92,7 @@ all:
 	$(MAKE) build VARIANT=ubuntu-2404-headless
 	$(MAKE) build VARIANT=ubuntu-2604-headless
 	$(MAKE) build VARIANT=fedora-44-headless
+	$(MAKE) build VARIANT=arch-headless
 	$(MAKE) build VARIANT=freebsd-14-headless
 	$(MAKE) build VARIANT=freebsd-15-headless
 

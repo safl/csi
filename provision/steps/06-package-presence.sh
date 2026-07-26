@@ -46,6 +46,24 @@ pkg)
         wg ipmitool
     )
     ;;
+pacman)
+    # Arch is the deliberately-lean "minimal netboot base": NO dev
+    # toolchain (no base-devel / gcc / cmake / qemu). The tripwire here
+    # only asserts what a minimal headless netboot image genuinely needs
+    # and what the arch-headless.user actually installs -- the netboot
+    # machinery (dracut, nbd-client), python for step 98's metadata
+    # emitter, sudo for the operator account, sshd, and growpart for
+    # step 09. Keep this in lockstep with the .user packages: list.
+    must_have=(
+        git
+        python3
+        sudo
+        sshd
+        dracut
+        nbd-client
+        growpart
+    )
+    ;;
 *)
     must_have=(
         git

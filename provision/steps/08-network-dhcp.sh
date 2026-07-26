@@ -102,7 +102,10 @@ fi
 # bake itself). On an image baked without cloud-init, the Raspberry Pi
 # chroot bake on NetworkManager-managed Raspberry Pi OS, it would drop an
 # inert file under /etc/cloud, so gate it on cloud-init being present.
-if command -v cloud-init >/dev/null 2>&1; then
+# Skip on Arch: cloud-init's netplan renderer does not exist there (Arch
+# ships no netplan), and we own networking directly via a systemd-networkd
+# .network in part 2 below, so this drop-in would be inert at best.
+if [ "$NOSI_PKGMGR" != "pacman" ] && command -v cloud-init >/dev/null 2>&1; then
 nosi_write_if_changed \
 "# Managed by nosi/provision/steps/08-network-dhcp.sh
 # DHCP on any wired interface, matched by NAME (en* predictable + eth*
@@ -176,6 +179,47 @@ dnf)
     # auto-DHCPs any ethernet, so the cloud-init drop-in (for the VM case)
     # plus clearing the build-VM keyfile is the whole fix on HW.
     rm -f /etc/NetworkManager/system-connections/cloud-init-*.nmconnection
+    ;;
+pacman)
+    # Arch cloud image (arch-boxes) uses systemd-networkd with predictable
+    # interface names DISABLED, so NICs surface as eth0/eth1... Own the
+    # policy ourselves with ONE NIC-agnostic .network matched by NAME GLOB
+    # (en* predictable + eth* legacy/VM), never by MAC, so the same image
+    # DHCPs on whatever NIC the target box has. RequiredForOnline=no keeps
+    # boot from blocking on a NIC with no carrier (the networkd analog of
+    # netplan's optional:true). Config-only, no `networkctl reload`: the
+    # build VM keeps its live link for the rest of the bake; the next boot
+    # (operator first boot, smoketest fresh boot) applies it. Drop any
+    # per-NIC .network the arch-boxes base may ship that could shadow ours.
+    install -d -m 0755 /etc/systemd/network
+    rm -f /etc/systemd/network/20-ethernet.network
+    nosi_write_if_changed \
+'# Managed by nosi/provision/steps/08-network-dhcp.sh
+# DHCP on any wired interface, matched by NAME (en* predictable + eth*
+# legacy/VM), never by MAC. RequiredForOnline=no keeps boot from blocking
+# on a NIC with no carrier.
+[Match]
+Name=en*
+Name=eth*
+
+[Network]
+DHCP=yes
+
+[Link]
+RequiredForOnline=no
+' /etc/systemd/network/50-nosi-dhcp.network 0644
+
+    # systemd-networkd + resolved are the arch-boxes cloud defaults; enable
+    # them explicitly so the "networking comes up on next boot" guarantee
+    # does not depend on the base image keeping them enabled. Point
+    # /etc/resolv.conf at the resolved stub so DNS follows the DHCP lease.
+    if command -v systemctl >/dev/null 2>&1; then
+        systemctl enable systemd-networkd.service 2>/dev/null \
+            || nosi_warn "could not enable systemd-networkd.service"
+        systemctl enable systemd-resolved.service 2>/dev/null \
+            || nosi_warn "could not enable systemd-resolved.service"
+    fi
+    ln -sf /run/systemd/resolve/stub-resolv.conf /etc/resolv.conf
     ;;
 esac
 

@@ -178,12 +178,40 @@ FREEBSD_BASE_STEPS=(
     33-serial-console
 )
 
+# Arch step set (headless only). Deliberately LEAN: Arch is the "minimal
+# netboot base" experiment, so it runs the operator/network/ssh/serial
+# infrastructure plus the dracut netboot wiring and NOTHING from the fat
+# dev-tooling chain (no 10-r8125-dkms / 12 / 20 / 21 / 22 / 23 / 24 / 25;
+# those need base-devel + a compiler this image intentionally omits). Same
+# group semantics as the others: 05 first (ALWAYS_FIRST), 06 presence
+# early, 98/99 last (FINAL_STEPS). Every step listed carries a pacman
+# branch; steps not listed are simply not applicable to a minimal headless
+# Arch image. Arch has only the headless shape and no derives, so there is
+# no Arch SHAPE_STEPS set.
+ARCH_BASE_STEPS=(
+    04-operator-account
+    06-package-presence
+    07-odus-sudoers
+    08-network-dhcp
+    09-growroot
+    28-ssh-config
+    31-root-lock
+    33-serial-console
+    34-netboot-ramboot-hook
+)
+
 is_freebsd=0
 [ "$NOSI_DISTRO" = "freebsd" ] && is_freebsd=1
+is_arch=0
+[ "$NOSI_DISTRO" = "arch" ] && is_arch=1
 
 if [ "$is_freebsd" -eq 1 ]; then
     # FreeBSD: curated list regardless of --shape-only (no shapes/derives).
     RUN_STEPS=( "${ALWAYS_FIRST[@]}" "${FREEBSD_BASE_STEPS[@]}" "${FINAL_STEPS[@]}" )
+elif [ "$is_arch" -eq 1 ]; then
+    # Arch: curated lean list regardless of --shape-only (headless-only,
+    # no shapes/derives).
+    RUN_STEPS=( "${ALWAYS_FIRST[@]}" "${ARCH_BASE_STEPS[@]}" "${FINAL_STEPS[@]}" )
 elif [ "$SHAPE_ONLY" -eq 1 ]; then
     # Derive context (chroot on a baked headless rootfs): base already
     # ran in the base bake; re-stamp identity, run only the shape delta,
