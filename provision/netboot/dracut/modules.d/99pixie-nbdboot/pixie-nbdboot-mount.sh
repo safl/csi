@@ -94,6 +94,33 @@ if [ "$persist" = "1" ]; then
     _pixie_trace "mount hook: persist=1; mount rw ${root_part} -> /sysroot"
     _pixie_status "mount.persist_start"
     mkdir -p /sysroot
+    # Grow the root to fill the device before mounting. Pixie can
+    # provision an nbdboot-overlay qcow2 LARGER than its base image (the
+    # overlay-size feature) -- the extra space shows up as a bigger
+    # /dev/nbd0, but the ext4 inside is still the base's size until
+    # resize2fs claims it. Do it offline here, ext[234] only, and only
+    # when the device is actually bigger than the fs (so no fsck tax on
+    # the common already-full case). Non-fatal: on any failure we mount
+    # at the current size, exactly as before this block existed.
+    fstype_now=$(blkid -o value -s TYPE "$root_part" 2>/dev/null || true)
+    case "$fstype_now" in
+        ext2 | ext3 | ext4)
+            dev_bytes=$(blockdev --getsize64 "$root_part" 2>/dev/null || echo 0)
+            fs_bytes=$(dumpe2fs -h "$root_part" 2>/dev/null \
+                | awk -F: '$1=="Block count"{c=$2+0} $1=="Block size"{s=$2+0} END{print c*s}')
+            if [ -n "$fs_bytes" ] && [ "${dev_bytes:-0}" -gt "${fs_bytes:-0}" ] 2>/dev/null; then
+                _pixie_status "mount.persist_resize"
+                _pixie_trace "mount hook: growing ${fstype_now} ${root_part} (${fs_bytes} -> ${dev_bytes} bytes)"
+                e2fsck -fp "$root_part" >/dev/null 2>&1 \
+                    || _pixie_trace "mount hook: e2fsck rc=$? (continuing)"
+                if resize2fs "$root_part" >/dev/null 2>&1; then
+                    _pixie_trace "mount hook: resize2fs done"
+                else
+                    _pixie_trace "mount hook: resize2fs rc=$? (mounting at current size)"
+                fi
+            fi
+            ;;
+    esac
     mnt_rc=1
     for fstype in ext4 xfs btrfs; do
         _pixie_trace "mount hook: mount -t ${fstype} -o rw ${root_part} -> /sysroot"

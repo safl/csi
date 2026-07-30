@@ -71,7 +71,8 @@ installkernel() {
 # initrd's hook directory for the given phase.
 install() {
     inst_multiple nbd-client mount umount awk sed grep sort cut wget \
-                  blockdev partx udevadm blkid ip modprobe
+                  blockdev partx udevadm blkid ip modprobe \
+                  resize2fs e2fsck dumpe2fs
     # ``$moddir`` is exported by dracut when it sources this file --
     # it points at the module's own directory.
     # shellcheck disable=SC2154
