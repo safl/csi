@@ -190,9 +190,16 @@ for unit in \
 done
 _pixie_trace "mount hook: masked networkd + NetworkManager + cloud-init on ${upper}"
 
-# Propagate DNS from dracut's netroot config. dracut writes DNS to
-# /tmp/net.*.resolv.conf (network-manager module) or /run/net-*.conf
-# (network-legacy). Copy the first one that has content.
+# Propagate DNS from dracut's network config. WHERE dracut records it
+# depends on which network module brought the link up:
+#   * network-manager (current Ubuntu 26.04): /run/NetworkManager/{,no-stub-}resolv.conf
+#   * older "network" module:                 /tmp/net.*.resolv.conf
+#   * network-legacy:                         /run/net-*.conf (DNSSERVERS= vars)
+# Copy the first that lists a real nameserver. Historically this only
+# checked the /tmp + /run/net-*.conf paths, so on NetworkManager-driven
+# boxes (where the DHCP DNS lands in /run/NetworkManager/resolv.conf) it
+# found nothing and left /etc/resolv.conf EMPTY -- the DNS was captured
+# by DHCP but never applied, so glibc had no resolver at all.
 #
 # Ubuntu 26.04 ships /etc/resolv.conf as a SYMLINK to
 # /run/systemd/resolve/stub-resolv.conf (systemd-resolved's stub).
@@ -217,29 +224,48 @@ cat > "${upper}/etc/tmpfiles.d/systemd-resolve.conf" <<EOF
 # a plain resolv.conf at initrd time and masks systemd-resolved, so
 # no one on the pivoted rootfs should touch that file.
 EOF
-for candidate in /tmp/net.*.resolv.conf /run/net-*.conf; do
+for candidate in \
+    /run/NetworkManager/no-stub-resolv.conf \
+    /run/NetworkManager/resolv.conf \
+    /tmp/net.*.resolv.conf \
+    /run/net-*.conf \
+; do
     [ -e "$candidate" ] || continue
     case "$candidate" in
-        *.resolv.conf)
-            cp "$candidate" "${upper}/etc/resolv.conf"
-            _pixie_trace "mount hook: wrote resolv.conf from ${candidate}"
-            break
-            ;;
         /run/net-*.conf)
+            # dracut network-legacy module: sourced shell vars, not a
+            # ready resolv.conf.
             # shellcheck disable=SC1090
             . "$candidate" 2>/dev/null || continue
             [ -n "${DNSSERVERS:-}" ] || continue
             {
-                echo "# Written by nosi pixie-ramboot dracut hook from ${candidate}."
+                echo "# Written by nosi nbdboot dracut hook from ${candidate}."
                 [ -n "${DOMAINSEARCH:-}" ] && echo "search ${DOMAINSEARCH}"
                 for _ns in ${DNSSERVERS}; do
                     echo "nameserver ${_ns}"
                 done
             } > "${upper}/etc/resolv.conf"
-            _pixie_trace "mount hook: wrote resolv.conf from ${candidate}"
-            break
+            ;;
+        *)
+            # A ready-made resolv.conf: NetworkManager's (current Ubuntu)
+            # or an older dracut /tmp/net.*.resolv.conf. Accept it only if
+            # it lists a real, non-stub nameserver -- skip a bare
+            # systemd-resolved 127.0.0.53 stub, which resolves nothing once
+            # we mask resolved on the pivoted rootfs. Pure-shell scan so the
+            # hook needs no grep in the initrd.
+            _have_ns=
+            while read -r _kw _val _rest; do
+                [ "$_kw" = "nameserver" ] || continue
+                [ "$_val" = "127.0.0.53" ] && continue
+                _have_ns=1
+                break
+            done < "$candidate"
+            [ -n "$_have_ns" ] || continue
+            cp "$candidate" "${upper}/etc/resolv.conf"
             ;;
     esac
+    _pixie_trace "mount hook: wrote resolv.conf from ${candidate}"
+    break
 done
 
 _pixie_status "ramboot.up"
