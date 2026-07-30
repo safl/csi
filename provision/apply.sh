@@ -124,7 +124,7 @@ BASE_STEPS=(
     31-root-lock
     32-firstboot-inventory
     33-serial-console
-    34-netboot-ramboot-hook
+    34-netboot-nbdboot-hook
     45-nosi-addons
 )
 
@@ -197,7 +197,7 @@ ARCH_BASE_STEPS=(
     28-ssh-config
     31-root-lock
     33-serial-console
-    34-netboot-ramboot-hook
+    34-netboot-nbdboot-hook
 )
 
 is_freebsd=0

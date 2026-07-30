@@ -117,7 +117,7 @@ def test_netboot_entries_pair_with_their_disk_image(registry):
     the slug ``<variant>-netboot`` while the sibling's ``name`` was
     the display string ``nosi <variant> netboot bundle (<arch>,
     <label>)``, so the lookup silently failed for every entry
-    loaded from a published catalog TOML and the ramboot chain fell
+    loaded from a published catalog TOML and the nbdboot chain fell
     all the way back to bty-media's kernel. Pin the equality here
     so a future drift fails this test rather than the deploy.
     """

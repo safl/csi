@@ -1,5 +1,5 @@
 #!/bin/sh
-# dracut initqueue/online hook for pixie ramboot (priority 20).
+# dracut initqueue/online hook for pixie nbdboot (priority 20).
 #
 # Runs after the ``network`` module has brought the primary NIC up
 # with DHCP. This is when we can finally reach the NBD server.
@@ -15,11 +15,11 @@
 # shellcheck disable=SC1091
 type getarg >/dev/null 2>&1 || . /lib/dracut-lib.sh
 
-_pixie_trace() { echo "pixie-ramboot: $*" >/dev/kmsg 2>/dev/null || echo "pixie-ramboot: $*"; }
+_pixie_trace() { echo "pixie-nbdboot: $*" >/dev/kmsg 2>/dev/null || echo "pixie-nbdboot: $*"; }
 _pixie_die() {
     _pixie_trace "FATAL: $*"
     _pixie_status "online.died:$*"
-    type emergency_shell >/dev/null 2>&1 && emergency_shell "pixie-ramboot: $*"
+    type emergency_shell >/dev/null 2>&1 && emergency_shell "pixie-nbdboot: $*"
     exec sleep 2147483647
 }
 
@@ -35,7 +35,7 @@ _pixie_getarg() {
 # Best-effort HTTP status ping. Traces via /dev/kmsg vanish below the
 # console loglevel on IPMI SoL, so this ships boot-phase progress to
 # pixie's event log via ``POST /pxe/<mac>/status`` -- the same shape
-# ``ramboot.up`` uses. Silent on failure (DHCP may not have completed
+# ``nbdboot.up`` uses. Silent on failure (DHCP may not have completed
 # yet, wget may be missing). Reports the value passed as ``$1`` as
 # the status token (e.g. ``online.nbd_connected``).
 _pixie_status() {

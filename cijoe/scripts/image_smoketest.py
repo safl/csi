@@ -731,7 +731,7 @@ def _run_assertions(
     # sentinel, the motd banner, the build-identity file, the serial
     # console (step 33, for IPMI SOL on the RTL8125 target hardware), sshd
     # enablement, and -- the whole reason this base exists -- that the
-    # dracut ramboot netboot wiring actually baked (step 34). The universal
+    # dracut nbdboot netboot wiring actually baked (step 34). The universal
     # metadata + login/sudo assertions above already ran.
     if distro == "arch":
         check(
@@ -779,19 +779,19 @@ def _run_assertions(
             "done && echo ok",
             lambda rc, out: (out == "ok", out or f"exit {rc}"),
         )
-        # ---- dracut ramboot wiring baked (step 34) -----------------------
-        # The pixie-ramboot dracut module + the conf.d that forces it into
+        # ---- dracut nbdboot wiring baked (step 34) -----------------------
+        # The pixie-nbdboot dracut module + the conf.d that forces it into
         # every initrd are what make this image nbdbootable. Assert the
         # module dir + the add_dracutmodules conf, plus the canonical
         # /boot/initramfs-linux.img the packer pairs with vmlinuz-linux.
         check(
-            "pixie-ramboot dracut module installed (step 34)",
-            "test -f /usr/lib/dracut/modules.d/99pixie-ramboot/module-setup.sh && echo ok",
-            lambda rc, out: (out == "ok", out or "missing 99pixie-ramboot module"),
+            "pixie-nbdboot dracut module installed (step 34)",
+            "test -f /usr/lib/dracut/modules.d/99pixie-nbdboot/module-setup.sh && echo ok",
+            lambda rc, out: (out == "ok", out or "missing 99pixie-nbdboot module"),
         )
         check(
-            "dracut conf forces pixie-ramboot into every initrd (step 34)",
-            "grep -q 'pixie-ramboot' /etc/dracut.conf.d/99-nosi-netboot.conf && echo ok",
+            "dracut conf forces pixie-nbdboot into every initrd (step 34)",
+            "grep -q 'pixie-nbdboot' /etc/dracut.conf.d/99-nosi-netboot.conf && echo ok",
             lambda rc, out: (out == "ok", out or "missing add_dracutmodules conf"),
         )
         check(

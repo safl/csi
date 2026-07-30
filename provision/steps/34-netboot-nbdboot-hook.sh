@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
-# nosi/provision/steps/34-netboot-ramboot-hook.sh
+# nosi/provision/steps/34-netboot-nbdboot-hook.sh
 #
-# Bake the pixie ramboot attach-hook into the image's initrd so the
+# Bake the pixie nbdboot attach-hook into the image's initrd so the
 # same disk image can either flash-boot locally (hook inert) OR
-# ramboot from NBD (hook fires when ``pixie.nbd=`` -- or the legacy
+# nbdboot from NBD (hook fires when ``pixie.nbd=`` -- or the legacy
 # ``bty.nbd=`` for backwards compat -- is on the kernel cmdline).
 #
-# The pixie/bty ramboot chain used to load a bty-media-baked kernel+initrd
+# The pixie/bty nbdboot chain used to load a bty-media-baked kernel+initrd
 # (Debian 6.12) regardless of the image's own kernel version, causing
-# ``uname -r`` under ramboot to not match the image's ``/lib/modules/``
+# ``uname -r`` under nbdboot to not match the image's ``/lib/modules/``
 # tree; any driver not in bty-media's kernel was unloadable in a
-# rambooted guest (r8125 DKMS, nvidia, custom hypervisor stacks, ...).
+# nbdbooted guest (r8125 DKMS, nvidia, custom hypervisor stacks, ...).
 # Shifting the hook-install to build time here means the initrd we ship
 # in the image carries the ATTACH machinery + the correct kernel
 # modules for the image's own kernel; pixie / bty just fetches the
@@ -19,7 +19,7 @@
 # ONE framework: dracut.
 #
 # Every netboot-capable nosi image -- Fedora, Ubuntu-26.04+, and now
-# Debian / Ubuntu-24.04 too -- rides the same dracut 99pixie-ramboot
+# Debian / Ubuntu-24.04 too -- rides the same dracut 99pixie-nbdboot
 # module. We install it under /usr/lib/dracut/modules.d/, force the
 # stock ``nbd`` module + nbd/overlay drivers into every initrd via
 # /etc/dracut.conf.d/99-nosi-netboot.conf, then ``dracut
@@ -44,7 +44,7 @@
 
 . "$(dirname "$(readlink -f "$0")")/../lib/common.sh"
 
-nosi_info "step 34-netboot-ramboot-hook (distro=$NOSI_DISTRO shape=${NOSI_SHAPE:-headless})"
+nosi_info "step 34-netboot-nbdboot-hook (distro=$NOSI_DISTRO shape=${NOSI_SHAPE:-headless})"
 nosi_require_root
 
 # Only headless images become bootable-from-network. desktop shapes
@@ -86,8 +86,8 @@ case "$NOSI_PKGMGR" in
         # matters: if both generators stay installed, a later
         # ``update-initramfs`` (a kernel-upgrade postinst on the running
         # box, an unrelated provision step) would overwrite our dracut
-        # initrd with an initramfs-tools one that carries NO ramboot hook
-        # -- the box would then flash-boot fine but never ramboot. Guard on
+        # initrd with an initramfs-tools one that carries NO nbdboot hook
+        # -- the box would then flash-boot fine but never nbdboot. Guard on
         # presence so this is a no-op on Ubuntu-26.04 (dracut-native, no
         # initramfs-tools to remove) and on re-runs.
         if nosi_pkg_installed initramfs-tools; then
@@ -105,7 +105,7 @@ case "$NOSI_PKGMGR" in
         # below; the ``--no-hostonly`` flag on the regen belt-and-braces it.
         install -d -m 0755 /etc/dracut.conf.d
         nosi_write_if_changed \
-'# Managed by nosi/provision/steps/34-netboot-ramboot-hook.sh
+'# Managed by nosi/provision/steps/34-netboot-nbdboot-hook.sh
 # (mirrors 14-initramfs-generic.sh; step 14 skips apt, so netboot apt
 # images get their generic-initrd conf from here instead).
 # Build a generic initramfs (all drivers), not host-only: nosi images are
@@ -130,19 +130,19 @@ hostonly="no"
         # framework: dracut" convergence the header describes). dracut,
         # its network + nbd modules, and the nbd-client attach binary all
         # ship in Arch's ``dracut`` and ``nbd`` packages; the
-        # ``network-manager`` dracut module our 99pixie-ramboot depends()
+        # ``network-manager`` dracut module our 99pixie-nbdboot depends()
         # names needs NetworkManager present at initrd-build time, so
         # install ``networkmanager`` too. It stays INSTALLED-BUT-DISABLED:
         # the booted system runs systemd-networkd (step 08); NM is only
-        # bundled into the initrd for the ramboot DHCP.
+        # bundled into the initrd for the nbdboot DHCP.
         nosi_pkg_install dracut nbd networkmanager
 
         # Make dracut the SOLE initramfs generator producing the file GRUB
         # references (/boot/initramfs-linux.img). On Arch both mkinitcpio
         # AND dracut ship pacman hooks that regenerate on a kernel upgrade;
-        # left alone, mkinitcpio's hook would overwrite our dracut ramboot
-        # initrd with a plain one that carries NO ramboot machinery (the
-        # box would then flash-boot fine but never ramboot -- the same
+        # left alone, mkinitcpio's hook would overwrite our dracut nbdboot
+        # initrd with a plain one that carries NO nbdboot machinery (the
+        # box would then flash-boot fine but never nbdboot -- the same
         # failure mode the apt branch's initramfs-tools purge guards
         # against). Mask both mkinitcpio hooks AND dracut's own default
         # hooks (they emit initramfs-<kver>.img + a heavy unified EFI image
@@ -160,7 +160,7 @@ hostonly="no"
         # initramfs must not assume the build VM's storage/driver profile.
         install -d -m 0755 /etc/dracut.conf.d
         nosi_write_if_changed \
-'# Managed by nosi/provision/steps/34-netboot-ramboot-hook.sh
+'# Managed by nosi/provision/steps/34-netboot-nbdboot-hook.sh
 # Build a generic initramfs (all drivers), not host-only: nosi images are
 # flashed to arbitrary bare metal, so the initramfs must not assume the
 # build VM hardware. Mirrors 14-initramfs-generic.sh (which is dnf-gated).
@@ -174,18 +174,18 @@ hostonly="no"
 esac
 
 # ---- unified dracut wiring (apt + dnf) ------------------------------------
-# Install the 99pixie-ramboot module + force the stock ``nbd`` module and
+# Install the 99pixie-nbdboot module + force the stock ``nbd`` module and
 # our drivers into every initrd via conf.d, then regenerate every installed
 # kernel's initrd. Three phased runtime hooks replace the old single
-# ``pixie-ramboot.sh`` so the cmdline override lands before initqueue's
+# ``pixie-nbdboot.sh`` so the cmdline override lands before initqueue's
 # baked root=UUID devexists polls and the mount phase runs after online has
 # attached /dev/nbd0. See module-setup.sh for the full contract.
-install -d -m 0755 /etc/dracut.conf.d /usr/lib/dracut/modules.d/99pixie-ramboot
+install -d -m 0755 /etc/dracut.conf.d /usr/lib/dracut/modules.d/99pixie-nbdboot
 install -m 0644 "$ASSETS/dracut/conf.d/99-nosi-netboot.conf" /etc/dracut.conf.d/99-nosi-netboot.conf
-install -m 0755 "$ASSETS/dracut/modules.d/99pixie-ramboot/module-setup.sh" /usr/lib/dracut/modules.d/99pixie-ramboot/module-setup.sh
-install -m 0755 "$ASSETS/dracut/modules.d/99pixie-ramboot/pixie-ramboot-cmdline.sh" /usr/lib/dracut/modules.d/99pixie-ramboot/pixie-ramboot-cmdline.sh
-install -m 0755 "$ASSETS/dracut/modules.d/99pixie-ramboot/pixie-ramboot-online.sh" /usr/lib/dracut/modules.d/99pixie-ramboot/pixie-ramboot-online.sh
-install -m 0755 "$ASSETS/dracut/modules.d/99pixie-ramboot/pixie-ramboot-mount.sh" /usr/lib/dracut/modules.d/99pixie-ramboot/pixie-ramboot-mount.sh
+install -m 0755 "$ASSETS/dracut/modules.d/99pixie-nbdboot/module-setup.sh" /usr/lib/dracut/modules.d/99pixie-nbdboot/module-setup.sh
+install -m 0755 "$ASSETS/dracut/modules.d/99pixie-nbdboot/pixie-nbdboot-cmdline.sh" /usr/lib/dracut/modules.d/99pixie-nbdboot/pixie-nbdboot-cmdline.sh
+install -m 0755 "$ASSETS/dracut/modules.d/99pixie-nbdboot/pixie-nbdboot-online.sh" /usr/lib/dracut/modules.d/99pixie-nbdboot/pixie-nbdboot-online.sh
+install -m 0755 "$ASSETS/dracut/modules.d/99pixie-nbdboot/pixie-nbdboot-mount.sh" /usr/lib/dracut/modules.d/99pixie-nbdboot/pixie-nbdboot-mount.sh
 
 # Regenerate the initrd(s). ``--no-hostonly`` forces generic even if the
 # conf above is somehow not picked up.
@@ -228,4 +228,4 @@ else
     dracut --regenerate-all --no-hostonly --force
 fi
 
-nosi_info "step 34-netboot-ramboot-hook done"
+nosi_info "step 34-netboot-nbdboot-hook done"
