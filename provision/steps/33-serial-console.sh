@@ -105,7 +105,7 @@ esac
 # Platform-serial UARTs (8250, kernel-registered at boot, not hot-plug) do
 # NOT always get an ``add`` event replayed during systemd-udev-trigger's
 # coldplug -- observed on GIGABYTE MC12-LE0 and other server boards booted
-# over NBD-backed ramboot, where boot completes to a running sshd but no
+# over NBD-backed nbdboot, where boot completes to a running sshd but no
 # login prompt paints on the BMC's IPMI SOL. Drop the BindsTo via a
 # drop-in and keep only ``ConditionPathExists=/dev/%I`` (already inherited
 # from the upstream unit) as the "is the port real" gate. Downside: on a

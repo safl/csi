@@ -1,7 +1,7 @@
 #!/bin/sh
-# dracut mount hook for pixie ramboot (priority 90).
+# dracut mount hook for pixie nbdboot (priority 90).
 #
-# Runs after ``pixie-ramboot-online.sh`` has attached /dev/nbd0 and
+# Runs after ``pixie-nbdboot-online.sh`` has attached /dev/nbd0 and
 # after dracut's built-in mount hooks have (attempted to) mount
 # /sysroot. Two modes gated on ``pixie.persist=1`` (or the legacy
 # ``bty.persist=1``):
@@ -27,16 +27,16 @@
 #     pivoted rootfs so userspace does not tear down the NIC the
 #     initrd owns.
 #   * Propagate DNS from dracut's netroot config.
-#   * POST a status ping so the pixie appliance can log ramboot.up.
+#   * POST a status ping so the pixie appliance can log nbdboot.up.
 
 # shellcheck disable=SC1091
 type getarg >/dev/null 2>&1 || . /lib/dracut-lib.sh
 
-_pixie_trace() { echo "pixie-ramboot: $*" >/dev/kmsg 2>/dev/null || echo "pixie-ramboot: $*"; }
+_pixie_trace() { echo "pixie-nbdboot: $*" >/dev/kmsg 2>/dev/null || echo "pixie-nbdboot: $*"; }
 _pixie_die() {
     _pixie_trace "FATAL: $*"
     _pixie_status "mount.died:$*"
-    type emergency_shell >/dev/null 2>&1 && emergency_shell "pixie-ramboot: $*"
+    type emergency_shell >/dev/null 2>&1 && emergency_shell "pixie-nbdboot: $*"
     exec sleep 2147483647
 }
 
@@ -53,7 +53,7 @@ _pixie_getarg() {
 # Best-effort HTTP status ping. Traces to /dev/kmsg vanish below the
 # console loglevel on IPMI SoL, so this ships boot-phase progress to
 # pixie's event log via ``POST /pxe/<mac>/status`` -- the same shape
-# ``ramboot.up`` uses. Silent on failure.
+# ``nbdboot.up`` uses. Silent on failure.
 _pixie_status() {
     _srv="$(_pixie_getarg server)"
     _mac="$(_pixie_getarg mac)"
@@ -152,7 +152,7 @@ fi
 # emergency mode on any board without local BOOT/UEFI labels.
 mkdir -p "${upper}/etc"
 cat > "${upper}/etc/fstab" <<EOF
-# Written by nosi pixie-ramboot dracut hook -- ramboot overrides the
+# Written by nosi pixie-nbdboot dracut hook -- nbdboot overrides the
 # image's baked /etc/fstab. / is already mounted from the initrd.
 EOF
 _pixie_trace "mount hook: wrote minimal /etc/fstab under ${upper}"
@@ -218,7 +218,7 @@ _pixie_trace "mount hook: masked networkd + NetworkManager + cloud-init on ${upp
 rm -f "${upper}/etc/resolv.conf"
 mkdir -p "${upper}/etc/tmpfiles.d"
 cat > "${upper}/etc/tmpfiles.d/systemd-resolve.conf" <<EOF
-# Managed by nosi pixie-ramboot dracut hook. Overrides
+# Managed by nosi pixie-nbdboot dracut hook. Overrides
 # /usr/lib/tmpfiles.d/systemd-resolve.conf so systemd-tmpfiles does
 # not recreate /etc/resolv.conf as a symlink at boot. Pixie writes
 # a plain resolv.conf at initrd time and masks systemd-resolved, so
@@ -268,5 +268,5 @@ for candidate in \
     break
 done
 
-_pixie_status "ramboot.up"
+_pixie_status "nbdboot.up"
 _pixie_trace "mount hook: done -- /sysroot is ${persist:+rw-nbd}${persist:-overlay-on-nbd}"

@@ -1,10 +1,10 @@
 """
-Extract the ramboot netboot bundle from a baked headless nosi image
+Extract the nbdboot netboot bundle from a baked headless nosi image
 ==================================================================
 
 Runs after ``diskimage_build`` (specifically, after step
-``34-netboot-ramboot-hook`` inside the guest has regenerated the
-initrd with the bty ramboot attach-hook baked in). Attaches the
+``34-netboot-nbdboot-hook`` inside the guest has regenerated the
+initrd with the bty nbdboot attach-hook baked in). Attaches the
 baked qcow2 via ``qemu-nbd`` (same mechanism ``derive_pack`` uses to
 chroot into the rootfs), walks the partitions looking for the
 ``/boot`` filesystem (the one carrying ``vmlinuz-*`` +
@@ -134,7 +134,7 @@ def _find_boot_dir(mount_root: Path) -> tuple[Path, str, Path]:
 def _detect_framework_and_strip_dracut(cijoe, initrd_path: Path) -> str:
     """Decide framework from initrd contents, and if dracut, strip the
     baked ``root=UUID=`` fragment + the initqueue ``devexists-`` polls
-    + emergency handlers that would otherwise block ramboot.
+    + emergency handlers that would otherwise block nbdboot.
 
     Returns ``"dracut"`` or ``"initramfs-tools"``. The framework is
     read from ground truth: ``main/var/lib/dracut/hooks/`` inside the
@@ -148,7 +148,7 @@ def _detect_framework_and_strip_dracut(cijoe, initrd_path: Path) -> str:
     cloud images). They're correct for the local-disk boot path and
     fatal for netboot: on a netboot the polls never resolve (no
     local disks) and dracut-initqueue blocks for 3 min before
-    entering emergency mode. The pixie-ramboot dracut module can't
+    entering emergency mode. The pixie-nbdboot dracut module can't
     strip them at install() time, since that would break the same
     image booting from a local disk; strip only the copy we ship in
     the bundle.
@@ -161,7 +161,7 @@ def _detect_framework_and_strip_dracut(cijoe, initrd_path: Path) -> str:
 
     On initramfs-tools initrds this is a detection-only pass with no
     strip: those dispatch via ``/scripts/${BOOT}`` (which does the
-    ramboot work directly) and never carry the baked root=UUID
+    nbdboot work directly) and never carry the baked root=UUID
     artefacts. If ``unmkinitramfs`` fails or the initrd has no
     ``main/`` split we can't inspect the contents; fall back to
     initramfs-tools since that keeps the strip a no-op and matches
@@ -318,7 +318,7 @@ def main(args, cijoe):
         # though the contents were built by dracut. If it's dracut,
         # this call also strips the baked root=UUID artefacts that
         # would otherwise block dracut-initqueue on netboot (no local
-        # disks to resolve). The pixie-ramboot dracut module can't do
+        # disks to resolve). The pixie-nbdboot dracut module can't do
         # the strip at install() time; it would break local-disk boot
         # of the same image. Strip only the copy we ship.
         framework = _detect_framework_and_strip_dracut(cijoe, initrd_out)

@@ -26,12 +26,12 @@
 #                cijoe/scripts/netboot_bundle_pack) and the build workflow
 #                publishes it as a companion ORAS artifact under
 #                ``ghcr.io/<owner>/<repo>/<variant>-netboot:<tag>``. bty's
-#                ramboot chain fetches these to boot the image with its
+#                nbdboot chain fetches these to boot the image with its
 #                own kernel (see the trio's netboot design). Set on the
 #                x86 headless Linux variants only: freebsd needs a
 #                separate boot chain, and the RPi arm64 variants land on
 #                bty's netboot roadmap later. Non-headless shapes (desktop
-#                / wsl / lxc / docker / proxmox) never ramboot -- desktop
+#                / wsl / lxc / docker / proxmox) never nbdboot -- desktop
 #                and proxmox are flash-only, the others are containerised.
 #
 # The use-case prose ("what is this variant for?") is NOT here: each

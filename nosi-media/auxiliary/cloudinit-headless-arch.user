@@ -80,16 +80,16 @@ packages:
   # sshd for the only login channel.
   - openssh
   # dracut: the initramfs generator this base switches to (replacing
-  # mkinitcpio) so the pixie/bty ramboot attach-hook can be baked in; see
-  # provision/steps/34-netboot-ramboot-hook.sh.
+  # mkinitcpio) so the pixie/bty nbdboot attach-hook can be baked in; see
+  # provision/steps/34-netboot-nbdboot-hook.sh.
   - dracut
   # nbd-client: the userspace attach binary dracut's online hook drives to
-  # connect the remote NBD export at ramboot time. Arch ships it in `nbd`.
+  # connect the remote NBD export at nbdboot time. Arch ships it in `nbd`.
   - nbd
   # NetworkManager: NOT enabled on the booted system (systemd-networkd owns
   # that, step 08). Installed only so the dracut `network-manager` module our
-  # 99pixie-ramboot depends() names can bundle NM into the initrd for the
-  # ramboot DHCP bring-up.
+  # 99pixie-nbdboot depends() names can bundle NM into the initrd for the
+  # nbdboot DHCP bring-up.
   - networkmanager
   # growpart for the first-boot root grow on bare metal (step 09).
   - cloud-guest-utils
@@ -123,7 +123,7 @@ write_files:
 runcmd:
 
   # nosi provision: operator account, systemd-networkd DHCP, sshd + host-key
-  # oneshot, serial console, and the dracut netboot ramboot wiring. Each step
+  # oneshot, serial console, and the dracut netboot nbdboot wiring. Each step
   # under provision/steps/ is independently idempotent. Same apply.sh runs on
   # a vanilla Arch VM (`sudo /opt/nosi/provision/apply.sh arch-headless`) to
   # reach this image's parity.
