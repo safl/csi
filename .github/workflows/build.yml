@@ -595,6 +595,7 @@ jobs:
             ~/system_imaging/disk/nosi-${{ matrix.variant }}.tar.zst
             ~/system_imaging/disk/nosi-${{ matrix.variant }}.tar.zst.sha256
             ~/system_imaging/disk/nosi-${{ matrix.variant }}.metadata.json
+            ~/system_imaging/disk/nosi-${{ matrix.variant }}-x86_64.smoketest-serial.log
             cijoe/cijoe-output/
           if-no-files-found: warn
           retention-days: 14

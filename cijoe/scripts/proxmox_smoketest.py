@@ -94,8 +94,11 @@ def main(args, cijoe):
         install_key_via_password(key_pub.read_text().strip(), DEFAULT_PASSWORD)
         rc = _assert_pve(key)
         if rc:
+            _dump_pve_diagnostics(key)
             dump_serial(serial)
     finally:
+        if rc:
+            _preserve_serial(serial, gz)
         kill_qemu(pidfile)
         if rc == 0:
             with contextlib.suppress(Exception):
@@ -179,5 +182,65 @@ def _assert_pve(key: Path, timeout: int = 360) -> int:
         if time.monotonic() >= end:
             break
         time.sleep(10)
-    log.info(f"[FAIL] PVE not up within {timeout}s: {last}")
+    # ERROR, not INFO: cijoe's console log level defaults to ERROR (only -l
+    # raises it), so an INFO verdict never reaches the CI log and a failure
+    # arrives with no statement of which of the three conditions was unmet.
+    log.error(f"[FAIL] PVE not up within {timeout}s: {last}")
     return 1
+
+
+def _dump_pve_diagnostics(key: Path) -> None:
+    """Log the in-VM state that explains a _assert_pve timeout.
+
+    The boot-test's own verdict says which condition was unmet; this says why.
+    Everything goes out at ERROR so it survives cijoe's default log level, and
+    each probe is best-effort: the VM is by definition unhealthy here, so a
+    probe that itself fails must not mask the ones that would have answered.
+    """
+    probes = [
+        ("hostname", "hostname; getent hosts \"$(hostname)\" || echo '(unresolvable)'"),
+        ("failed units", "systemctl --failed --no-legend --plain"),
+        (
+            "pve units",
+            "systemctl is-active pve-cluster pvedaemon pveproxy pvestatd "
+            "nosi-proxmox-hosts nosi-proxmox-online",
+        ),
+        ("pmxcfs mount", "ls -la /etc/pve/ /etc/pve/local/ 2>&1 | head -40"),
+        ("pvecm status", "sudo pvecm status 2>&1 | head -20"),
+        ("acl list", "sudo pveum acl list 2>&1 | head -20"),
+        (
+            "journal (pve + nosi oneshots)",
+            "sudo journalctl --no-pager -n 80 "
+            "-u pve-cluster -u pvedaemon -u pveproxy -u pvestatd "
+            "-u nosi-proxmox-hosts -u nosi-proxmox-online",
+        ),
+    ]
+    log.error("---- proxmox boot-test diagnostics ----")
+    for name, cmd in probes:
+        try:
+            rc, out = ssh_run(key, cmd)
+        except Exception as exc:  # forensics must never raise
+            log.error(f"  {name}: probe failed: {exc}")
+            continue
+        log.error(f"  {name} (rc={rc}):")
+        for line in (out or "(no output)").splitlines():
+            log.error(f"    {line}")
+    log.error("---------------------------------------")
+
+
+def _preserve_serial(serial: Path, gz: Path) -> None:
+    """Copy the boot-test serial console next to the published artifact.
+
+    The workdir lives outside every path the workflow uploads, so on failure
+    the full console has until now stayed on the ephemeral runner and only the
+    last 40 lines (via dump_serial) survived. The .img.gz's directory IS
+    uploaded, so landing it there carries the whole console off the runner.
+    """
+    if not serial.exists():
+        return
+    dest = gz.with_name(f"{gz.name.split('.img.gz')[0]}.smoketest-serial.log")
+    try:
+        shutil.copyfile(serial, dest)
+        log.error(f"boot-test serial console preserved for upload: {dest}")
+    except OSError as exc:
+        log.error(f"could not preserve the boot-test serial console: {exc}")
