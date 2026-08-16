@@ -58,6 +58,19 @@ echo "postfix postfix/mailname string nosi-proxmox" | debconf-set-selections
 apt-get update
 apt-get install -y proxmox-ve postfix open-iscsi chrony
 
+# proxmox-ve's packages drop in the pve-enterprise repo, which requires a paid
+# subscription: on the shipped host every `apt-get update` then fails with
+# "401 Unauthorized ... repository is not signed" and exits 100. That breaks
+# apt for the operator and for pveproxy's first-boot ExecStartPost
+# (/usr/bin/pveupdate runs apt-get update inside a 90s start timeout). We use
+# the no-subscription repo configured above, so drop the enterprise one, as
+# Proxmox's own install-on-Debian guide instructs.
+rm -f /etc/apt/sources.list.d/pve-enterprise.list \
+      /etc/apt/sources.list.d/pve-enterprise.sources
+if grep -Rqs enterprise.proxmox.com /etc/apt/sources.list /etc/apt/sources.list.d/; then
+    nosi_die "pve-enterprise repo still configured; apt-get update fails with 401 on the shipped host"
+fi
+
 # postfix's postinst snapshots the BUILD host's FQDN into main.cf -- in the
 # derive chroot that is the ephemeral CI runner (e.g.
 # runnervm....internal.cloudapp.net), which then ships in the published image.
